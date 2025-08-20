@@ -1,16 +1,35 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { Badge, Button, Dropdown, Menu, Space, Typography } from 'antd'
-import { BellOutlined, LogoutOutlined, DashboardOutlined, DollarOutlined, SwapOutlined, TeamOutlined } from '@ant-design/icons'
+import { Badge, Button, Dropdown, Menu, Space, Typography, Drawer, Layout } from 'antd'
+import { 
+  MenuOutlined, 
+  BellOutlined, 
+  LogoutOutlined, 
+  DashboardOutlined, 
+  DollarOutlined, 
+  SwapOutlined, 
+  TeamOutlined,
+  UserOutlined
+} from '@ant-design/icons'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { db, auth } from '../../firebase.js'
 import { signOut } from 'firebase/auth'
 import { collection, onSnapshot, query, where } from 'firebase/firestore'
+import './AdminHeader.css'
 
 export default function AdminHeader() {
   const navigate = useNavigate()
   const location = useLocation()
   const [pendingDeposits, setPendingDeposits] = useState([])
   const [pendingWithdrawals, setPendingWithdrawals] = useState([])
+  const [mobileMenuVisible, setMobileMenuVisible] = useState(false)
+  const { Header } = Layout
+  
+  const menuItems = [
+    { key: 'dashboard', icon: <DashboardOutlined />, label: 'Dashboard', path: '/admin' },
+    { key: 'deposits', icon: <DollarOutlined />, label: 'Deposits', path: '/admin/deposits' },
+    { key: 'withdrawals', icon: <SwapOutlined />, label: 'Withdrawals', path: '/admin/withdrawals' },
+    { key: 'users', icon: <TeamOutlined />, label: 'Users', path: '/admin/users' },
+  ]
 
   useEffect(() => {
     const unsub1 = onSnapshot(
@@ -72,31 +91,89 @@ export default function AdminHeader() {
 
   const isActive = (path) => location.pathname === path
 
-  const logout = async () => {
-    try { await signOut(auth) } catch {}
-    localStorage.removeItem('adminSession')
-    navigate('/admin/auth', { replace: true })
-  }
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      navigate('/admin/login');
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
+  };
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', gap: 12, flexWrap: 'wrap' }}>
-      <Space wrap>
-        <Typography.Title level={4} style={{ margin: 0 }}>Admin Panel</Typography.Title>
-        <Button type={isActive('/admin') ? 'primary' : 'default'} icon={<DashboardOutlined />} onClick={() => navigate('/admin')}>Dashboard</Button>
-        <Button type={isActive('/admin/deposits') ? 'primary' : 'default'} icon={<DollarOutlined />} onClick={() => navigate('/admin/deposits')}>Deposits</Button>
-        <Button type={isActive('/admin/withdrawals') ? 'primary' : 'default'} icon={<SwapOutlined />} onClick={() => navigate('/admin/withdrawals')}>Withdrawals</Button>
-        <Button type={isActive('/admin/users') ? 'primary' : 'default'} icon={<TeamOutlined />} onClick={() => navigate('/admin/users')}>Users</Button>
-      </Space>
-      <Space>
-        <Dropdown overlay={menu} trigger={['click']} placement="bottomRight">
-          <Badge count={unreadCount} size="small">
-            <Button icon={<BellOutlined />}>
-              Notifications
+    <Header className="admin-header">
+      <div className="admin-header-container">
+        <div className="logo">
+          <Button 
+            type="text" 
+            icon={<MenuOutlined />} 
+            className="menu-trigger"
+            onClick={() => setMobileMenuVisible(true)}
+          />
+          <Typography.Title level={4} className="title">Admin Panel</Typography.Title>
+        </div>
+        
+        <Space className="desktop-nav">
+          {menuItems.map(item => (
+            <Button 
+              key={item.key}
+              type={location.pathname === item.path ? 'primary' : 'text'}
+              icon={item.icon}
+              onClick={() => navigate(item.path)}
+              className="nav-button"
+            >
+              {item.label}
             </Button>
-          </Badge>
-        </Dropdown>
-        <Button danger icon={<LogoutOutlined />} onClick={logout}>Logout</Button>
-      </Space>
-    </div>
+          ))}
+        </Space>
+
+        <Space className="header-actions">
+          <Dropdown overlay={menu} trigger={['click']} overlayStyle={{ width: 320 }}>
+            <Badge count={unreadCount} size="small">
+              <Button type="text" className="action-button" icon={<BellOutlined />} />
+            </Badge>
+          </Dropdown>
+          <Button 
+            type="text" 
+            className="action-button"
+            icon={<LogoutOutlined />} 
+            onClick={handleLogout} 
+          />
+        </Space>
+      </div>
+
+      {/* Mobile Drawer Navigation */}
+      <Drawer
+        title="Admin Menu"
+        placement="left"
+        closable={true}
+        onClose={() => setMobileMenuVisible(false)}
+        open={mobileMenuVisible}
+        width={250}
+        className="mobile-drawer"
+      >
+        <div className="mobile-menu">
+          {menuItems.map(item => (
+            <Button 
+              key={item.key}
+              type={location.pathname === item.path ? 'primary' : 'text'}
+              icon={item.icon}
+              onClick={() => {
+                navigate(item.path)
+                setMobileMenuVisible(false)
+              }}
+              block
+              className="mobile-menu-item"
+            >
+              {item.label}
+            </Button>
+          ))}
+          <div className="mobile-user-info">
+            <UserOutlined />
+            <span>{auth.currentUser?.email || 'Admin'}</span>
+          </div>
+        </div>
+      </Drawer>
+    </Header>
   )
 }
