@@ -17,6 +17,7 @@ export default function TradeChart({ height = 420, theme = 'light', symbol = 'BT
   const chartRef = useRef(null)
   const seriesRef = useRef(null)
   const pollRef = useRef(null)
+  const base = import.meta.env.DEV ? '/api/binance' : '/.netlify/functions/binance'
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -53,7 +54,7 @@ export default function TradeChart({ height = 420, theme = 'light', symbol = 'BT
 
     async function loadInitial() {
       try {
-        const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=500`
+        const url = `${base}/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=500`
         const res = await fetch(url)
         if (!res.ok) throw new Error('Failed to fetch klines')
         const data = await res.json()
@@ -71,7 +72,7 @@ export default function TradeChart({ height = 420, theme = 'light', symbol = 'BT
       stopPolling()
       pollRef.current = setInterval(async () => {
         try {
-          const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=2`
+          const url = `${base}/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=2`
           const res = await fetch(url)
           if (!res.ok) return
           const data = await res.json()

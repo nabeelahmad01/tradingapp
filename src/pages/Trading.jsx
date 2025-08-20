@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { Row, Col, Card, Button, Segmented, Typography, Space, InputNumber, Drawer, Tabs, List, Tag, Divider, Select, Input } from 'antd'
+import { Row, Col, Card, Button, Segmented, Typography, Space, InputNumber, Drawer, Tabs, List, Tag, Divider, Select, Input, Radio, message } from 'antd'
 import TradeChart from '../components/TradeChart.jsx'
+import { auth, db } from '../firebase.js'
+import { doc, onSnapshot, runTransaction, collection, addDoc, serverTimestamp } from 'firebase/firestore'
 
 const { Title, Text } = Typography
 
@@ -16,6 +18,24 @@ export default function Trading() {
   const [positions, setPositions] = useState([])
   const [history, setHistory] = useState([])
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [accountType, setAccountType] = useState('real') // 'real' | 'demo'
+  const [balances, setBalances] = useState({ realBalance: 0, demoBalance: 1000 })
+
+  // Subscribe to user wallet balances
+  useEffect(() => {
+    const unsub = auth.onAuthStateChanged((u) => {
+      if (!u) return
+      const ref = doc(db, 'users', u.uid)
+      return onSnapshot(ref, (snap) => {
+        const d = snap.data() || {}
+        setBalances({
+          realBalance: Number(d.realBalance || 0),
+          demoBalance: Number(d.demoBalance || 10000),
+        })
+      })
+    })
+    return () => unsub()
+  }, [])
 
   const tfToBinance = {
     '1m': '1m',
@@ -34,13 +54,26 @@ export default function Trading() {
 
   const payoutText = useMemo(() => `${payoutPct}% payout`, [payoutPct])
 
-  const createPosition = (side) => {
+  const createPosition = async (side) => {
     if (!latestPrice) return
+    const user = auth.currentUser
+    if (!user) {
+      message.error('Please login to trade')
+      return
+    }
+    const useDemo = accountType === 'demo'
+    const balField = useDemo ? 'demoBalance' : 'realBalance'
+    const currentBal = balances[balField]
+    if (amount > currentBal) {
+      message.error(`Insufficient ${useDemo ? 'demo' : 'real'} balance`)
+      return
+    }
     const now = Date.now()
     const pos = {
       id: `${now}-${Math.random().toString(36).slice(2, 7)}`,
       side, // 'Buy' | 'Sell'
       amount,
+      accountType,
       entryPrice: latestPrice,
       payoutPct,
       duration,
@@ -49,6 +82,38 @@ export default function Trading() {
       status: 'open',
     }
     setPositions((prev) => [pos, ...prev])
+
+    // Deduct stake immediately and record trade document
+    try {
+      await runTransaction(db, async (tx) => {
+        const userRef = doc(db, 'users', user.uid)
+        const userSnap = await tx.get(userRef)
+        const data = userSnap.data() || {}
+        const bal = Number(data[balField] || 0)
+        if (bal < amount && !useDemo) throw new Error('Insufficient real balance')
+        if (bal < amount && useDemo) throw new Error('Insufficient demo balance')
+        tx.update(userRef, { [balField]: bal - amount })
+        const tradesCol = collection(db, 'trades')
+        tx.set(doc(tradesCol), { // create with auto-id via addDoc alternative pattern is not possible in tx, so set with doc(tradesCol)
+          uid: user.uid,
+          email: user.email || null,
+          symbol,
+          timeframe,
+          binanceInterval: tfToBinance[timeframe],
+          side,
+          amount,
+          accountType,
+          entryPrice: latestPrice,
+          payoutPct,
+          status: 'open',
+          openTime: now,
+          expiryTime: pos.expiryTime,
+          createdAt: serverTimestamp(),
+        })
+      })
+    } catch (e) {
+      message.error(e.message)
+    }
   }
 
   const onBuy = () => createPosition('Buy')
@@ -77,6 +142,43 @@ export default function Trading() {
     return () => clearInterval(t)
   }, [latestPrice])
 
+  // When positions close, settle PnL to the appropriate wallet
+  useEffect(() => {
+    if (!history.length) return
+    const last = history[0]
+    const user = auth.currentUser
+    if (!user) return
+    const balField = last.accountType === 'demo' ? 'demoBalance' : 'realBalance'
+    const delta = last.pnl > 0 ? last.pnl + last.amount : 0 // add back stake + profit if won (stake already deducted)
+    if (delta === 0) return
+    runTransaction(db, async (tx) => {
+      const userRef = doc(db, 'users', user.uid)
+      const snap = await tx.get(userRef)
+      const data = snap.data() || {}
+      const bal = Number(data[balField] || 0)
+      tx.update(userRef, { [balField]: bal + delta })
+    }).catch(() => {})
+
+    // Record trade result in history collection
+    addDoc(collection(db, 'tradeHistory'), {
+      uid: user.uid,
+      email: user.email || null,
+      symbol,
+      timeframe,
+      side: last.side,
+      accountType: last.accountType,
+      amount: last.amount,
+      entryPrice: last.entryPrice,
+      exitPrice: last.exitPrice,
+      payoutPct: last.payoutPct,
+      pnl: last.pnl,
+      status: last.status,
+      openTime: last.openTime,
+      closeTime: last.closeTime,
+      createdAt: serverTimestamp(),
+    }).catch(() => {})
+  }, [history])
+
   return (
     <div className="container" style={{ paddingBlock: 8 }}>
       <Row gutter={[16, 16]}>
@@ -87,6 +189,13 @@ export default function Trading() {
             title={<Space direction="vertical" size={0}>
               <Title level={5} style={{ margin: 0 }}>{symbol.replace('USDT', '/USDT')} {latestPrice ? <Text type="secondary">• ${latestPrice.toFixed(2)}</Text> : null}</Title>
               <Space size={8} wrap>
+                <div>
+                  <Text type="secondary">Account</Text>
+                  <Radio.Group size="small" value={accountType} onChange={(e)=>setAccountType(e.target.value)}>
+                    <Radio.Button value="real">Real (${balances.realBalance.toFixed(2)})</Radio.Button>
+                    <Radio.Button value="demo">Demo (${balances.demoBalance.toFixed(2)})</Radio.Button>
+                  </Radio.Group>
+                </div>
                 <div>
                   <Text type="secondary">Pair</Text>
                   <Space wrap>
@@ -144,14 +253,44 @@ export default function Trading() {
             </Space>}
           >
             <TradeChart height={460} theme={theme} symbol={symbol} interval={tfToBinance[timeframe]} onPriceUpdate={setLatestPrice} />
+            {/* Mobile trade panel under chart */}
+            <div className="only-mobile" style={{ marginTop: 8 }}>
+              <Card size="small" styles={{ body: { padding: 12 } }}>
+                <Space direction="vertical" style={{ width: '100%' }}>
+                  {latestPrice && (
+                    <Text>Market: <b>${latestPrice.toFixed(2)}</b></Text>
+                  )}
+                  <Text type="secondary">Duration</Text>
+                  <Segmented
+                    size="small"
+                    value={duration}
+                    onChange={setDuration}
+                    options={[{label:'30s',value:'30s'},{label:'1m',value:'1m'},{label:'5m',value:'5m'}]}
+                  />
+                  <Text type="secondary">Amount</Text>
+                  <InputNumber
+                    style={{ width: '100%' }}
+                    min={1}
+                    step={1}
+                    value={amount}
+                    onChange={setAmount}
+                    addonBefore="$"
+                  />
+                  <div className="trade-actions" style={{ display: 'flex', gap: 8 }}>
+                    <Button onClick={() => createPosition('Sell')} block size="large" style={{ background: '#ea3943', color: '#fff' }}>Sell</Button>
+                    <Button onClick={() => createPosition('Buy')} block type="primary" size="large" style={{ background: '#16c784' }}>Buy</Button>
+                  </div>
+                </Space>
+              </Card>
+            </div>
           </Card>
         </Col>
         <Col xs={24} lg={8}>
-          <Space direction="vertical" style={{ width: '100%' }} size={16}>
+          <Space direction="vertical" style={{ width: '100%' }} size={16} className="only-desktop">
             <Card title="Balance">
               <Space direction="vertical">
-                <Title level={4} style={{ margin: 0 }}>$1,250.00</Title>
-                <Text type="secondary">Demo</Text>
+                <Title level={4} style={{ margin: 0 }}>${accountType === 'real' ? balances.realBalance.toFixed(2) : balances.demoBalance.toFixed(2)}</Title>
+                <Text type="secondary">{accountType === 'real' ? 'Real' : 'Demo'}</Text>
               </Space>
             </Card>
 
@@ -178,8 +317,8 @@ export default function Trading() {
                   addonBefore="$"
                 />
                 <div className="trade-actions" style={{ display: 'flex', gap: 8 }}>
-                  <Button onClick={onSell} block size="large" style={{ background: '#ea3943', color: '#fff' }}>Sell</Button>
-                  <Button onClick={onBuy} block type="primary" size="large" style={{ background: '#16c784' }}>Buy</Button>
+                  <Button onClick={() => createPosition('Sell')} block size="large" style={{ background: '#ea3943', color: '#fff' }}>Sell</Button>
+                  <Button onClick={() => createPosition('Buy')} block type="primary" size="large" style={{ background: '#16c784' }}>Buy</Button>
                 </div>
               </Space>
             </Card>

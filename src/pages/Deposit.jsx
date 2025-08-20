@@ -1,6 +1,9 @@
 import React, { useState } from 'react'
 import { Card, Typography, Form, Input, InputNumber, Upload, Button, message } from 'antd'
 import { UploadOutlined } from '@ant-design/icons'
+import { auth, db, storage } from '../firebase.js'
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
+import { addDoc, collection, serverTimestamp } from 'firebase/firestore'
 
 export default function Deposit() {
   const [loading, setLoading] = useState(false)
@@ -9,9 +12,27 @@ export default function Deposit() {
   const onFinish = async (values) => {
     setLoading(true)
     try {
-      // TODO: Upload screenshot to Firebase Storage and save request in Firestore
-      console.log('Deposit submit', { ...values, fileList })
+      const user = auth.currentUser
+      if (!user) throw new Error('Please login to submit a deposit')
+      let screenshotUrl = null
+      if (fileList?.[0]?.originFileObj) {
+        const file = fileList[0].originFileObj
+        const path = `deposits/${user.uid}/${Date.now()}_${file.name}`
+        const storageRef = ref(storage, path)
+        await uploadBytes(storageRef, file)
+        screenshotUrl = await getDownloadURL(storageRef)
+      }
+      await addDoc(collection(db, 'deposits'), {
+        uid: user.uid,
+        email: user.email || null,
+        amount: Number(values.amount),
+        txId: values.txId,
+        screenshotUrl,
+        status: 'pending',
+        createdAt: serverTimestamp(),
+      })
       message.success('Deposit submitted for review')
+      setFileList([])
     } catch (e) {
       message.error(e.message)
     } finally {
