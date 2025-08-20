@@ -1,8 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react'
-import { Row, Col, Card, Button, Segmented, Typography, Space, InputNumber, Drawer, Tabs, List, Tag, Divider, Select, Input, Radio, message } from 'antd'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { Row, Col, Card, Button, Segmented, Typography, Space, InputNumber, Drawer, Tabs, List, Tag, Divider, Select, Input, Radio, message, Alert } from 'antd'
 import TradeChart from '../components/TradeChart.jsx'
 import { auth, db } from '../firebase.js'
-import { doc, onSnapshot, runTransaction, collection, addDoc, serverTimestamp } from 'firebase/firestore'
+import { doc, onSnapshot, runTransaction, collection, addDoc, serverTimestamp, query, where } from 'firebase/firestore'
 
 const { Title, Text } = Typography
 
@@ -12,14 +12,25 @@ export default function Trading() {
   const [timeframe, setTimeframe] = useState('1m')
   const [symbol, setSymbol] = useState('BTCUSDT')
   const [custom, setCustom] = useState('')
-  const [latestPrice, setLatestPrice] = useState(null)
+  const [latestPrice, _setLatestPrice] = useState(null)
+  const latestPriceRef = useRef(null)
+  const setLatestPrice = (p) => { latestPriceRef.current = p; _setLatestPrice(p) }
   const [duration, setDuration] = useState('1m') // 30s, 1m, 5m
   const [payoutPct] = useState(85)
   const [positions, setPositions] = useState([])
   const [history, setHistory] = useState([])
+  const [historyRemote, setHistoryRemote] = useState([])
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [accountType, setAccountType] = useState('real') // 'real' | 'demo'
   const [balances, setBalances] = useState({ realBalance: 0, demoBalance: 1000 })
+  const [lastPlaced, setLastPlaced] = useState(null)
+
+  // Auto-clear lastPlaced banner after a few seconds
+  useEffect(() => {
+    if (!lastPlaced) return
+    const t = setTimeout(() => setLastPlaced(null), 5000)
+    return () => clearTimeout(t)
+  }, [lastPlaced])
 
   // Subscribe to user wallet balances
   useEffect(() => {
@@ -89,7 +100,11 @@ export default function Trading() {
         const userRef = doc(db, 'users', user.uid)
         const userSnap = await tx.get(userRef)
         const data = userSnap.data() || {}
-        const bal = Number(data[balField] || 0)
+        // Initialize demo balance to 10000 if missing to allow demo trading by default
+        if (useDemo && (data.demoBalance === undefined || data.demoBalance === null)) {
+          tx.set(userRef, { demoBalance: 10000 }, { merge: true })
+        }
+        const bal = Number((useDemo ? (data.demoBalance ?? 10000) : (data.realBalance ?? 0)))
         if (bal < amount && !useDemo) throw new Error('Insufficient real balance')
         if (bal < amount && useDemo) throw new Error('Insufficient demo balance')
         tx.update(userRef, { [balField]: bal - amount })
@@ -111,6 +126,16 @@ export default function Trading() {
           createdAt: serverTimestamp(),
         })
       })
+      // Visual indication
+      setLastPlaced({
+        side,
+        amount,
+        duration,
+        expiryTime: pos.expiryTime,
+        accountType,
+        symbol,
+      })
+      message.success(`${side} $${amount} ${symbol} • ${duration}. Expires at ${new Date(pos.expiryTime).toLocaleTimeString()}`)
     } catch (e) {
       message.error(e.message)
     }
@@ -119,28 +144,24 @@ export default function Trading() {
   const onBuy = () => createPosition('Buy')
   const onSell = () => createPosition('Sell')
 
-  // Close expired positions and move to history using latest price
+  // Settle each position exactly at expiry using a timer and the latest price snapshot at that time
   useEffect(() => {
-    const t = setInterval(() => {
-      setPositions((prev) => {
-        const now = Date.now()
-        const stillOpen = []
-        const toHistory = []
-        for (const p of prev) {
-          if (now >= p.expiryTime && latestPrice) {
-            const won = p.side === 'Buy' ? latestPrice > p.entryPrice : latestPrice < p.entryPrice
-            const pnl = won ? (p.amount * (p.payoutPct / 100)) : -p.amount
-            toHistory.push({ ...p, status: won ? 'won' : 'lost', exitPrice: latestPrice, closeTime: now, pnl })
-          } else {
-            stillOpen.push(p)
-          }
-        }
-        if (toHistory.length) setHistory((h) => [...toHistory, ...h])
-        return stillOpen
-      })
-    }, 1000)
-    return () => clearInterval(t)
-  }, [latestPrice])
+    // whenever positions change, for any open position without a timer, schedule settlement
+    const timers = []
+    positions.forEach((p) => {
+      const delay = Math.max(0, p.expiryTime - Date.now())
+      const timer = setTimeout(() => {
+        const priceAtExpiry = latestPriceRef.current
+        setPositions((prev) => prev.filter((x) => x.id !== p.id))
+        if (!priceAtExpiry) return
+        const won = p.side === 'Buy' ? priceAtExpiry > p.entryPrice : priceAtExpiry < p.entryPrice
+        const pnl = won ? (p.amount * (p.payoutPct / 100)) : -p.amount
+        setHistory((h) => [{ ...p, status: won ? 'won' : 'lost', exitPrice: priceAtExpiry, closeTime: Date.now(), pnl }, ...h])
+      }, delay)
+      timers.push(timer)
+    })
+    return () => { timers.forEach(clearTimeout) }
+  }, [positions])
 
   // When positions close, settle PnL to the appropriate wallet
   useEffect(() => {
@@ -178,6 +199,22 @@ export default function Trading() {
       createdAt: serverTimestamp(),
     }).catch(() => {})
   }, [history])
+
+  // Subscribe to Firestore trade history for the signed-in user (for persistent history display)
+  useEffect(() => {
+    const unsubAuth = auth.onAuthStateChanged((u) => {
+      if (!u) { setHistoryRemote([]); return }
+      const q = query(collection(db, 'tradeHistory'), where('uid', '==', u.uid))
+      const unsub = onSnapshot(q, (snap) => {
+        const items = snap.docs.map(d => ({ id: d.id, ...d.data() }))
+        // Sort newest first by closeTime or createdAt if closeTime missing
+        items.sort((a, b) => (b.closeTime || 0) - (a.closeTime || 0) || (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0))
+        setHistoryRemote(items)
+      })
+      return unsub
+    })
+    return () => unsubAuth()
+  }, [])
 
   return (
     <div className="container" style={{ paddingBlock: 8 }}>
@@ -252,6 +289,15 @@ export default function Trading() {
               </Space>
             </Space>}
           >
+            {lastPlaced && (
+              <Alert
+                showIcon
+                type={lastPlaced.side === 'Buy' ? 'success' : 'error'}
+                message={`${lastPlaced.side} placed: $${lastPlaced.amount} ${lastPlaced.symbol} • ${lastPlaced.duration}`}
+                description={`Expires at ${new Date(lastPlaced.expiryTime).toLocaleTimeString()} • Account: ${lastPlaced.accountType}`}
+                style={{ marginBottom: 8 }}
+              />
+            )}
             <TradeChart height={460} theme={theme} symbol={symbol} interval={tfToBinance[timeframe]} onPriceUpdate={setLatestPrice} />
             {/* Mobile trade panel under chart */}
             <div className="only-mobile" style={{ marginTop: 8 }}>
@@ -354,17 +400,19 @@ export default function Trading() {
                     children: (
                       <List
                         locale={{ emptyText: 'No history yet' }}
-                        dataSource={history}
+                        dataSource={historyRemote}
                         renderItem={(p) => (
                           <List.Item>
                             <Space direction="vertical" style={{ width: '100%' }}>
                               <Space style={{ justifyContent: 'space-between', width: '100%' }}>
                                 <Text strong>{p.side}</Text>
-                                <Tag color={p.status === 'won' ? 'green' : 'red'}>{p.status.toUpperCase()}</Tag>
+                                <Tag color={p.status === 'won' ? 'green' : 'red'}>{(p.status || '').toString().toUpperCase()}</Tag>
                               </Space>
-                              <Text type="secondary">Amount: ${p.amount} • Entry: ${p.entryPrice.toFixed(2)} • Exit: ${p.exitPrice.toFixed(2)}</Text>
-                              <Text type={p.pnl >= 0 ? 'success' : 'danger'}>PnL: {p.pnl >= 0 ? '+' : ''}${p.pnl.toFixed(2)}</Text>
-                              <Text type="secondary">Closed: {new Date(p.closeTime).toLocaleTimeString()}</Text>
+                              <Text type="secondary">Amount: ${p.amount} • Entry: ${Number(p.entryPrice || 0).toFixed(2)} • Exit: ${Number(p.exitPrice || 0).toFixed(2)}</Text>
+                              <Text type={(p.pnl || 0) >= 0 ? 'success' : 'danger'}>PnL: {(p.pnl || 0) >= 0 ? '+' : ''}${Number(p.pnl || 0).toFixed(2)}</Text>
+                              {p.closeTime ? (
+                                <Text type="secondary">Closed: {new Date(p.closeTime).toLocaleTimeString()}</Text>
+                              ) : null}
                             </Space>
                           </List.Item>
                         )}
@@ -378,8 +426,28 @@ export default function Trading() {
         </Col>
       </Row>
 
+      {/* Fixed bottom mobile Buy/Sell bar */}
+      <div className="mobile-trade-bar only-mobile">
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          {latestPrice && (
+            <Text type="secondary" style={{ whiteSpace: 'nowrap' }}>Mkt ${latestPrice.toFixed(2)}</Text>
+          )}
+          <InputNumber
+            size="small"
+            min={1}
+            step={1}
+            value={amount}
+            onChange={setAmount}
+            addonBefore="$"
+            style={{ flex: 1 }}
+          />
+          <Button onClick={onSell} size="large" style={{ background: '#ea3943', color: '#fff' }}>Sell</Button>
+          <Button onClick={onBuy} size="large" type="primary" style={{ background: '#16c784' }}>Buy</Button>
+        </div>
+      </div>
+
       {/* Mobile Trade Bottom Sheet Trigger */}
-      <Button className="fab" type="primary" size="large" onClick={() => setDrawerOpen(true)}>Trade</Button>
+      {/* <Button className="fab" type="primary" size="large" onClick={() => setDrawerOpen(true)}>Trade</Button>
       <Drawer
         title="Trade"
         placement="bottom"
@@ -407,7 +475,7 @@ export default function Trading() {
           <Divider style={{ margin: '8px 0' }} />
           <Text type="secondary">{payoutText}</Text>
         </Space>
-      </Drawer>
+      </Drawer> */}
     </div>
   )
 }

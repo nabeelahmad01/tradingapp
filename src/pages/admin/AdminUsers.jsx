@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { Card, Table, Space, Button, Tag, Input, Drawer, Tabs, List, Typography } from 'antd'
+import { Card, Table, Space, Button, Tag, Input, Drawer, Tabs, List, Typography, Modal, InputNumber, Radio, message } from 'antd'
 import AdminHeader from '../../components/admin/AdminHeader.jsx'
 import { db } from '../../firebase.js'
-import { collection, onSnapshot, query, orderBy, where } from 'firebase/firestore'
+import { collection, onSnapshot, query, where, runTransaction, doc } from 'firebase/firestore'
 
 export default function AdminUsers() {
   const [users, setUsers] = useState([])
@@ -30,11 +30,11 @@ export default function AdminUsers() {
     setOpen(true)
     // subscribe to this user's deposits and withdrawals
     const unsubDeps = onSnapshot(
-      query(collection(db, 'deposits'), where('uid', '==', u.id), orderBy('createdAt', 'desc')),
+      query(collection(db, 'deposits'), where('uid', '==', u.id)),
       (snap) => setDeposits(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
     )
     const unsubWdr = onSnapshot(
-      query(collection(db, 'withdrawals'), where('uid', '==', u.id), orderBy('createdAt', 'desc')),
+      query(collection(db, 'withdrawals'), where('uid', '==', u.id)),
       (snap) => setWithdrawals(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
     )
     // store for cleanup on close
@@ -61,10 +61,49 @@ export default function AdminUsers() {
       title: 'Actions', key: 'actions', render: (_, r) => (
         <Space>
           <Button onClick={() => showHistory(r)}>View History</Button>
+          <Button type="primary" onClick={() => openAdjust(r)}>Adjust Balance</Button>
         </Space>
       )
     },
   ]
+
+  // Adjust Balance Modal state
+  const [adjustOpen, setAdjustOpen] = useState(false)
+  const [adjustUser, setAdjustUser] = useState(null)
+  const [adjustType, setAdjustType] = useState('real') // 'real' | 'demo'
+  const [adjustMode, setAdjustMode] = useState('credit') // 'credit' | 'debit'
+  const [adjustAmount, setAdjustAmount] = useState(50)
+
+  const openAdjust = (u) => {
+    setAdjustUser(u)
+    setAdjustType('real')
+    setAdjustMode('credit')
+    setAdjustAmount(50)
+    setAdjustOpen(true)
+  }
+
+  const doAdjust = async () => {
+    if (!adjustUser) return
+    const uid = adjustUser.id
+    const field = adjustType === 'demo' ? 'demoBalance' : 'realBalance'
+    const amt = Number(adjustAmount || 0)
+    if (amt <= 0) { message.error('Enter a valid amount'); return }
+    try {
+      await runTransaction(db, async (tx) => {
+        const ref = doc(db, 'users', uid)
+        const snap = await tx.get(ref)
+        const data = snap.data() || {}
+        const current = Number(data[field] || (field==='demoBalance'?10000:0))
+        const next = adjustMode === 'credit' ? current + amt : current - amt
+        if (next < 0) throw new Error('Balance cannot go negative')
+        tx.set(ref, { [field]: next }, { merge: true })
+      })
+      message.success('Balance updated')
+      setAdjustOpen(false)
+    } catch (e) {
+      message.error(e.message)
+    }
+  }
 
   return (
     <div className="container">
@@ -75,6 +114,26 @@ export default function AdminUsers() {
         </Space>
         <Table rowKey="id" dataSource={filtered} columns={columns} pagination={{ pageSize: 10 }} />
       </Card>
+
+      <Modal
+        title={adjustUser ? `Adjust Balance: ${adjustUser.email||adjustUser.id}` : 'Adjust Balance'}
+        open={adjustOpen}
+        onCancel={() => setAdjustOpen(false)}
+        onOk={doAdjust}
+        okText={adjustMode==='credit'?'Credit':'Debit'}
+      >
+        <Space direction="vertical" style={{ width: '100%' }}>
+          <Radio.Group value={adjustType} onChange={(e)=>setAdjustType(e.target.value)}>
+            <Radio.Button value="real">Real</Radio.Button>
+            <Radio.Button value="demo">Demo</Radio.Button>
+          </Radio.Group>
+          <Radio.Group value={adjustMode} onChange={(e)=>setAdjustMode(e.target.value)}>
+            <Radio.Button value="credit">Credit</Radio.Button>
+            <Radio.Button value="debit">Debit</Radio.Button>
+          </Radio.Group>
+          <InputNumber min={1} step={1} value={adjustAmount} onChange={setAdjustAmount} addonBefore="$" style={{ width: '100%' }} />
+        </Space>
+      </Modal>
 
       <Drawer title={selectedUser ? `History: ${selectedUser.email||selectedUser.id}` : 'History'} open={open} onClose={closeDrawer} width={Math.min(720, window.innerWidth - 40)}>
         <Tabs

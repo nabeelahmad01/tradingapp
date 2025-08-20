@@ -41,4 +41,14 @@ h1, h2, h3, h4, h5, h6, .heading { font-family: 'Poppins', system-ui; }
     box-shadow: 0 8px 20px rgba(0,0,0,0.35);
     z-index: 1000;
   }
+  .mobile-trade-bar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+    background: rgba(14, 17, 22, 0.98);
+    border-top: 1px solid #1f2329;
+    z-index: 999;
+  }
 }
