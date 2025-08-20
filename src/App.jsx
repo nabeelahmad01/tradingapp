@@ -14,6 +14,8 @@ import AdminDashboard from './pages/admin/AdminDashboard.jsx'
 import AdminDeposits from './pages/admin/AdminDeposits.jsx'
 import AdminWithdrawals from './pages/admin/AdminWithdrawals.jsx'
 import AdminNews from './pages/admin/AdminNews.jsx'
+import AdminLogin from './pages/admin/AdminLogin.jsx'
+import AdminUsers from './pages/admin/AdminUsers.jsx'
 import ProtectedRoute from './routes/ProtectedRoute.jsx'
 import AdminRoute from './routes/AdminRoute.jsx'
 import Trading from './pages/Trading.jsx'
@@ -84,6 +86,9 @@ export default function App() {
           <Route path="/news" element={<News />} />
           <Route path="/instructions" element={<Instructions />} />
 
+          {/* Admin authentication route */}
+          <Route path="/admin/auth" element={<AdminLogin />} />
+
           <Route
             path="/admin"
             element={
@@ -105,6 +110,14 @@ export default function App() {
             element={
               <AdminRoute>
                 <AdminWithdrawals />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/users"
+            element={
+              <AdminRoute>
+                <AdminUsers />
               </AdminRoute>
             }
           />

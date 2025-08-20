@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
-import { Card, Table, Button, Space, Tag, message } from 'antd'
+import { Card, Table, Button, Space, Tag, message, Image } from 'antd'
+import AdminHeader from '../../components/admin/AdminHeader.jsx'
 import { db } from '../../firebase.js'
 import { collection, onSnapshot, query, where, doc, runTransaction, updateDoc } from 'firebase/firestore'
 
@@ -45,6 +46,12 @@ export default function AdminDeposits() {
     { title: 'User', dataIndex: 'email' },
     { title: 'Amount', dataIndex: 'amount' },
     { title: 'TxID', dataIndex: 'txId' },
+    { title: 'Screenshot', dataIndex: 'screenshotUrl', render: (url) => url ? (
+      <Space>
+        <Image src={url} width={40} height={40} style={{ objectFit: 'cover' }} />
+        <a href={url} target="_blank" rel="noreferrer">Open</a>
+      </Space>
+    ) : <Tag>None</Tag> },
     { title: 'Status', dataIndex: 'status', render: (s) => <Tag color={s==='pending'?'orange':s==='approved'?'green':'red'}>{s}</Tag> },
     { title: 'Actions', key: 'actions', render: (_, r) => (
       <Space>
@@ -56,8 +63,13 @@ export default function AdminDeposits() {
 
   return (
     <div className="container">
+      <AdminHeader />
       <Card title="Pending Deposits">
-        <Table columns={columns} dataSource={data} rowKey={(r)=>r.id} />
+        <Table
+          rowKey="id"
+          dataSource={data}
+          columns={columns}
+        />
       </Card>
     </div>
   )

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react'
 import { Card, Table, Button, Space, Tag, message } from 'antd'
+import AdminHeader from '../../components/admin/AdminHeader.jsx'
 import { db } from '../../firebase.js'
 import { collection, onSnapshot, query, where, doc, runTransaction, updateDoc } from 'firebase/firestore'
 
@@ -58,6 +59,7 @@ export default function AdminWithdrawals() {
 
   return (
     <div className="container">
+      <AdminHeader />
       <Card title="Pending Withdrawals">
         <Table columns={columns} dataSource={data} rowKey={(r)=>r.id} />
       </Card>
