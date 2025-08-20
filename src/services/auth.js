@@ -23,6 +23,8 @@ export async function saveUserProfile(user, extra = {}) {
     displayName: user.displayName || null,
     photoURL: user.photoURL || null,
     role: 'user',
+    realBalance: 0,  // Initialize real balance to 0
+    demoBalance: 10000,  // Initialize demo balance to 10,000
     createdAt: serverTimestamp(),
     ...extra,
   }

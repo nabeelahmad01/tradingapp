@@ -13,10 +13,14 @@ export default function AdminUsers() {
   const [withdrawals, setWithdrawals] = useState([])
 
   useEffect(() => {
-    const unsub = onSnapshot(query(collection(db, 'users'), orderBy('email')), (snap) => {
-      setUsers(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
-    })
-    return () => unsub()
+    let unsub
+    try {
+      const q = query(collection(db, 'users'))
+      unsub = onSnapshot(q, (snap) => {
+        setUsers(snap.docs.map((d) => ({ id: d.id, ...d.data() })))
+      })
+    } catch (e) { console.error('Error loading users:', e) }
+    return () => { if (unsub) unsub() }
   }, [])
 
   const filtered = useMemo(() => {
