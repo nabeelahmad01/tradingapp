@@ -1,0 +1,14 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
+
+# SPA fallback so client routes work on refresh
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
