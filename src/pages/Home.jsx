@@ -1,10 +1,13 @@
-import React from 'react'
-import { Card, Typography, Row, Col, Button, Space, Steps, Collapse } from 'antd'
+import React, { useState } from 'react'
+import { Card, Typography, Row, Col, Button, Space, Steps, Collapse, Select, Input, Segmented } from 'antd'
 import { Link } from 'react-router-dom'
 import TradeChart from '../components/TradeChart.jsx'
 import SupportWidget from '../components/SupportWidget.jsx'
 
 export default function Home() {
+  const [symbol, setSymbol] = useState('BTCUSDT')
+  const [interval, setInterval] = useState('1m')
+  const [custom, setCustom] = useState('')
   return (
     <div className="container" style={{ paddingBlock: 16 }}>
       <Row gutter={[16, 16]} align="middle">
@@ -25,7 +28,32 @@ export default function Home() {
         </Col>
         <Col xs={24} lg={12}>
           <Card styles={{ body: { padding: 8 } }}>
-            <TradeChart height={260} theme="dark" />
+            <Space direction="vertical" size={8} style={{ width: '100%' }}>
+              <Space wrap>
+                <Select
+                  value={symbol}
+                  style={{ width: 160 }}
+                  onChange={setSymbol}
+                  options={[
+                    'BTCUSDT','ETHUSDT','BNBUSDT','SOLUSDT','XRPUSDT','DOGEUSDT','ADAUSDT','TONUSDT','TRXUSDT','SHIBUSDT',
+                  ].map(s => ({ label: s, value: s }))}
+                />
+                <Input
+                  placeholder="Any symbol e.g. SHIBUSDT"
+                  value={custom}
+                  onChange={(e) => setCustom(e.target.value)}
+                  style={{ width: 200 }}
+                  allowClear
+                />
+                <Button onClick={() => custom && setSymbol(custom.toUpperCase().replace('/',''))}>Apply</Button>
+                <Segmented
+                  value={interval}
+                  onChange={(v) => setInterval(v)}
+                  options={[ '1m','5m','15m','1h','4h','1d' ]}
+                />
+              </Space>
+              <TradeChart height={260} theme="dark" symbol={symbol} interval={interval} />
+            </Space>
           </Card>
         </Col>
       </Row>

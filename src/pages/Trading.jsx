@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { Row, Col, Card, Button, Segmented, Typography, Space, InputNumber, Drawer, Tabs, List, Tag, Divider } from 'antd'
+import { Row, Col, Card, Button, Segmented, Typography, Space, InputNumber, Drawer, Tabs, List, Tag, Divider, Select, Input } from 'antd'
 import TradeChart from '../components/TradeChart.jsx'
 
 const { Title, Text } = Typography
@@ -8,7 +8,8 @@ export default function Trading() {
   const [theme] = useState('dark')
   const [amount, setAmount] = useState(10)
   const [timeframe, setTimeframe] = useState('1m')
-  const [symbol] = useState('BTCUSDT')
+  const [symbol, setSymbol] = useState('BTCUSDT')
+  const [custom, setCustom] = useState('')
   const [latestPrice, setLatestPrice] = useState(null)
   const [duration, setDuration] = useState('1m') // 30s, 1m, 5m
   const [payoutPct] = useState(85)
@@ -86,6 +87,29 @@ export default function Trading() {
             title={<Space direction="vertical" size={0}>
               <Title level={5} style={{ margin: 0 }}>{symbol.replace('USDT', '/USDT')} {latestPrice ? <Text type="secondary">• ${latestPrice.toFixed(2)}</Text> : null}</Title>
               <Space size={8} wrap>
+                <div>
+                  <Text type="secondary">Pair</Text>
+                  <Space wrap>
+                    <Select
+                      size="small"
+                      value={symbol}
+                      style={{ width: 140 }}
+                      onChange={setSymbol}
+                      options={[
+                        'BTCUSDT','ETHUSDT','BNBUSDT','SOLUSDT','XRPUSDT','DOGEUSDT','ADAUSDT','TONUSDT','TRXUSDT','SHIBUSDT',
+                      ].map(s => ({ label: s, value: s }))}
+                    />
+                    <Input
+                      size="small"
+                      placeholder="Custom e.g. AVAXUSDT"
+                      value={custom}
+                      onChange={(e) => setCustom(e.target.value)}
+                      style={{ width: 160 }}
+                      allowClear
+                    />
+                    <Button size="small" onClick={() => custom && setSymbol(custom.toUpperCase().replace('/',''))}>Apply</Button>
+                  </Space>
+                </div>
                 <div>
                   <Text type="secondary">Timeframe</Text>
                   <Segmented
