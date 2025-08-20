@@ -11,6 +11,7 @@ export default function Home() {
         <Col xs={24} lg={12}>
           <Space direction="vertical" size={12}>
             <Typography.Title style={{ marginBottom: 0 }}>
+              Amman Saleem
               Trade Smart. Fast. Secure.
             </Typography.Title>
             <Typography.Paragraph type="secondary" style={{ marginTop: 0 }}>
