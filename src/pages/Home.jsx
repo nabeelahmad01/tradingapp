@@ -10,11 +10,11 @@ export default function Home() {
       <Row gutter={[16, 16]} align="middle">
         <Col xs={24} lg={12}>
           <Space direction="vertical" size={12}>
-            <Typography.Title style={{ marginBottom: 0 }}>
+            <Typography.Title className="heading" style={{ marginBottom: 0 }}>
               Amman Saleem
               Trade Smart. Fast. Secure.
             </Typography.Title>
-            <Typography.Paragraph type="secondary" style={{ marginTop: 0 }}>
+            <Typography.Paragraph className="para" type="secondary" style={{ marginTop: 0 }}>
               Modern trading interface with real-time candles, quick deposits, and instant withdrawals.
             </Typography.Paragraph>
             <Space wrap>
@@ -33,17 +33,17 @@ export default function Home() {
       <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
         <Col xs={24} md={8}>
           <Card title="Secure Wallets">
-            Your funds are safe. Deposit using Binance TxID and verify with screenshots.
+            <span className="para">Your funds are safe. Deposit using Binance TxID and verify with screenshots.</span>
           </Card>
         </Col>
         <Col xs={24} md={8}>
           <Card title="Fast Withdrawals">
-            Request withdrawals easily and track request history inside the app.
+            <span className="para">Request withdrawals easily and track request history inside the app.</span>
           </Card>
         </Col>
         <Col xs={24} md={8}>
           <Card title="Daily News">
-            Stay updated with market news and announcements.
+            <span className="para">Stay updated with market news and announcements.</span>
           </Card>
         </Col>
       </Row>
@@ -53,7 +53,7 @@ export default function Home() {
         <Col span={24}>
           <Card>
             <Typography.Title level={3} className="heading">About Our Platform</Typography.Title>
-            <Typography.Paragraph>
+            <Typography.Paragraph className="para">
               We built a lightweight trading experience focused on speed, clarity, and reliability. Deposit and withdraw with confidence, view live charts, and stay informed with curated news.
             </Typography.Paragraph>
           </Card>
@@ -82,20 +82,20 @@ export default function Home() {
       <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
         <Col xs={24} md={8}>
           <Card>
-            <Typography.Text strong>Ali R.</Typography.Text>
-            <Typography.Paragraph type="secondary">Fast deposits and clear UI. Love the minimal design.</Typography.Paragraph>
+            <Typography.Text className="heading" strong>Ali R.</Typography.Text>
+            <Typography.Paragraph className="para" type="secondary">Fast deposits and clear UI. Love the minimal design.</Typography.Paragraph>
           </Card>
         </Col>
         <Col xs={24} md={8}>
           <Card>
-            <Typography.Text strong>Sara K.</Typography.Text>
-            <Typography.Paragraph type="secondary">Withdrawals are quick and support is helpful.</Typography.Paragraph>
+            <Typography.Text className="heading" strong>Sara K.</Typography.Text>
+            <Typography.Paragraph className="para" type="secondary">Withdrawals are quick and support is helpful.</Typography.Paragraph>
           </Card>
         </Col>
         <Col xs={24} md={8}>
           <Card>
-            <Typography.Text strong>Hamza T.</Typography.Text>
-            <Typography.Paragraph type="secondary">The chart is smooth and responsive on mobile.</Typography.Paragraph>
+            <Typography.Text className="heading" strong>Hamza T.</Typography.Text>
+            <Typography.Paragraph className="para" type="secondary">The chart is smooth and responsive on mobile.</Typography.Paragraph>
           </Card>
         </Col>
       </Row>
@@ -107,9 +107,9 @@ export default function Home() {
             <Typography.Title level={3} className="heading">FAQ</Typography.Title>
             <Collapse
               items={[
-                { key: '1', label: 'Is my money safe?', children: <p>We verify deposits and handle requests with strict checks.</p> },
-                { key: '2', label: 'How long do withdrawals take?', children: <p>Typically under 24 hours after approval.</p> },
-                { key: '3', label: 'Can I trade on mobile?', children: <p>Yes, the interface is optimized for mobile devices.</p> },
+                { key: '1', label: 'Is my money safe?', children: <p className="para">We verify deposits and handle requests with strict checks.</p> },
+                { key: '2', label: 'How long do withdrawals take?', children: <p className="para">Typically under 24 hours after approval.</p> },
+                { key: '3', label: 'Can I trade on mobile?', children: <p className="para">Yes, the interface is optimized for mobile devices.</p> },
               ]}
             />
           </Card>

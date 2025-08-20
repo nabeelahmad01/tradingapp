@@ -3,6 +3,7 @@ body { margin: 0; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Sego
 .container { max-width: 980px; margin: 0 auto; }
 
 h1, h2, h3, h4, h5, h6, .heading { font-family: 'Poppins', system-ui; }
+.para { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans'; font-weight: 400; }
 
 /* Nav responsiveness */
 .nav-toggle { display: none; }
