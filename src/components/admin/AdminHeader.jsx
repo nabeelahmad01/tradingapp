@@ -29,6 +29,7 @@ export default function AdminHeader() {
     { key: 'deposits', icon: <DollarOutlined />, label: 'Deposits', path: '/admin/deposits' },
     { key: 'withdrawals', icon: <SwapOutlined />, label: 'Withdrawals', path: '/admin/withdrawals' },
     { key: 'users', icon: <TeamOutlined />, label: 'Users', path: '/admin/users' },
+    { key: 'settings', icon: <UserOutlined />, label: 'Settings', path: '/admin/settings' },
   ]
 
   useEffect(() => {
@@ -94,7 +95,7 @@ export default function AdminHeader() {
   const handleLogout = async () => {
     try {
       await signOut(auth);
-      navigate('/admin/login');
+      navigate('/admin/auth');
     } catch (error) {
       console.error('Error signing out:', error);
     }

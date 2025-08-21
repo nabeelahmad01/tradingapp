@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { Card, Table, Button, Space, Tag, message, Image } from 'antd'
 import AdminHeader from '../../components/admin/AdminHeader.jsx'
 import { db } from '../../firebase.js'
-import { collection, onSnapshot, query, where, doc, runTransaction, updateDoc } from 'firebase/firestore'
+import { collection, onSnapshot, query, where, doc, runTransaction, updateDoc, serverTimestamp } from 'firebase/firestore'
 
 export default function AdminDeposits() {
   const [data, setData] = useState([])
@@ -26,7 +26,7 @@ export default function AdminDeposits() {
         const userSnap = await tx.get(userRef)
         const bal = Number(userSnap.data()?.realBalance || 0)
         tx.update(userRef, { realBalance: bal + Number(amount || 0) })
-        tx.update(depRef, { status: 'approved' })
+        tx.update(depRef, { status: 'approved', approvedAt: serverTimestamp() })
       })
       message.success('Deposit approved and balance updated')
     } catch (e) {

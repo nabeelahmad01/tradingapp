@@ -3,6 +3,7 @@ import { Row, Col, Card, Button, Segmented, Typography, Space, InputNumber, Draw
 import TradeChart from '../components/TradeChart.jsx'
 import { auth, db } from '../firebase.js'
 import { doc, onSnapshot, runTransaction, collection, addDoc, serverTimestamp, query, where } from 'firebase/firestore'
+import { onSettings, defaultSettings } from '../services/settings.js'
 
 const { Title, Text } = Typography
 
@@ -16,7 +17,7 @@ export default function Trading() {
   const latestPriceRef = useRef(null)
   const setLatestPrice = (p) => { latestPriceRef.current = p; _setLatestPrice(p) }
   const [duration, setDuration] = useState('1m') // 30s, 1m, 5m
-  const [payoutPct] = useState(85)
+  const [payoutPct, setPayoutPct] = useState(defaultSettings.payoutPct)
   const [positions, setPositions] = useState([])
   const [history, setHistory] = useState([])
   const [historyRemote, setHistoryRemote] = useState([])
@@ -31,6 +32,12 @@ export default function Trading() {
     const t = setTimeout(() => setLastPlaced(null), 5000)
     return () => clearTimeout(t)
   }, [lastPlaced])
+
+  // Subscribe to platform settings for payout %
+  useEffect(() => {
+    const unsub = onSettings((s) => setPayoutPct(Number(s.payoutPct || defaultSettings.payoutPct)))
+    return () => unsub && unsub()
+  }, [])
 
   // Subscribe to user wallet balances
   useEffect(() => {

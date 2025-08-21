@@ -1,12 +1,15 @@
 import React, { useEffect, useState } from 'react'
-import { Card, Typography, Form, InputNumber, Input, Button, message, Radio } from 'antd'
+import { Card, Typography, Form, InputNumber, Input, Button, message, Radio, Alert } from 'antd'
 import { auth, db } from '../firebase.js'
-import { doc, getDoc, addDoc, collection, serverTimestamp } from 'firebase/firestore'
+import { doc, getDoc, addDoc, collection, serverTimestamp, query, where, orderBy, limit as qlimit, getDocs, Timestamp } from 'firebase/firestore'
+import { onSettings, defaultSettings } from '../services/settings.js'
 
 export default function Withdraw() {
   const [loading, setLoading] = useState(false)
   const [balances, setBalances] = useState({ realBalance: 0, demoBalance: 10000 })
   const [accountType, setAccountType] = useState('real')
+  const [settings, setSettings] = useState(defaultSettings)
+  const [amountPreview, setAmountPreview] = useState(0)
 
   useEffect(() => {
     const unsub = auth.onAuthStateChanged(async (u) => {
@@ -18,6 +21,12 @@ export default function Withdraw() {
     return () => unsub()
   }, [])
 
+  // subscribe settings
+  useEffect(() => {
+    const unsub = onSettings((s) => setSettings(s))
+    return () => unsub && unsub()
+  }, [])
+
   const onFinish = async (values) => {
     setLoading(true)
     try {
@@ -27,10 +36,76 @@ export default function Withdraw() {
       const amount = Number(values.amount)
       if (amount <= 0) throw new Error('Amount must be greater than 0')
       if (amount > balances.realBalance) throw new Error('Amount exceeds available Real balance')
+      if (amount < Number(settings.withdrawMin || 0)) throw new Error(`Minimum withdrawal is $${Number(settings.withdrawMin||0).toFixed(2)}`)
+      // KYC enforcement
+      if (settings.kycRequired) {
+        const uSnap = await getDoc(doc(db, 'users', user.uid))
+        const uData = uSnap.data() || {}
+        if (!uData.kycVerified) throw new Error('KYC is required before withdrawal')
+      }
+      // Cooldown after last approved deposit
+      const depQ = query(
+        collection(db, 'deposits'),
+        where('uid', '==', user.uid),
+        where('status', '==', 'approved'),
+        orderBy('createdAt', 'desc'),
+        qlimit(1)
+      )
+      const depDocs = await getDocs(depQ)
+      if (!depDocs.empty) {
+        const lastDep = depDocs.docs[0].data()
+        const lastDepAt = lastDep.approvedAt || lastDep.createdAt // fallback if approvedAt not present
+        if (lastDepAt?.toDate) {
+          const diffMs = Date.now() - lastDepAt.toDate().getTime()
+          const hours = diffMs / (1000 * 60 * 60)
+          if (hours < Number(settings.withdrawCooldownHoursAfterDeposit || 0)) {
+            throw new Error(`You can withdraw ${Math.ceil(Number(settings.withdrawCooldownHoursAfterDeposit)-hours)} hour(s) after your last approved deposit`)
+          }
+        }
+      }
+      // Min trades and volume (real account only)
+      const tradesQ = query(collection(db, 'trades'), where('uid', '==', user.uid), where('accountType', '==', 'real'))
+      const tSnap = await getDocs(tradesQ)
+      const tradeCount = tSnap.size
+      let volume = 0
+      tSnap.forEach((d)=>{ volume += Number(d.data()?.amount || 0) })
+      if (tradeCount < Number(settings.withdrawMinTrades || 0)) {
+        throw new Error(`Minimum ${settings.withdrawMinTrades} trades required before withdrawal`)
+      }
+      if (volume < Number(settings.withdrawMinVolumeUsd || 0)) {
+        throw new Error(`Minimum trading volume $${Number(settings.withdrawMinVolumeUsd).toFixed(2)} required before withdrawal`)
+      }
+      // Max requests per day
+      const startOfDay = new Date()
+      startOfDay.setHours(0,0,0,0)
+      const wQ = query(
+        collection(db, 'withdrawals'),
+        where('uid', '==', user.uid),
+        where('createdAt', '>=', Timestamp.fromDate(startOfDay))
+      )
+      const wSnap = await getDocs(wQ)
+      if (wSnap.size >= Number(settings.withdrawMaxRequestsPerDay || 0)) {
+        throw new Error(`Daily limit reached: max ${settings.withdrawMaxRequestsPerDay} withdrawal request(s) per day`)
+      }
+      // Sum today's requested gross amounts to enforce daily cap
+      let todaysGross = 0
+      wSnap.forEach((d)=>{ todaysGross += Number(d.data()?.amount || 0) })
+      const maxPerDay = Number(settings.withdrawMaxPerDay || 0)
+      if (maxPerDay > 0 && (todaysGross + amount) > maxPerDay) {
+        const remaining = Math.max(0, maxPerDay - todaysGross)
+        throw new Error(`Daily withdrawal cap $${maxPerDay.toFixed(2)}. You can request up to $${remaining.toFixed(2)} more today`)
+      }
+      // compute fee and net
+      const feePct = Number(settings.withdrawFeePct || 0)
+      const feeUsd = +(amount * (feePct / 100)).toFixed(2)
+      const netUsd = +(amount - feeUsd).toFixed(2)
       await addDoc(collection(db, 'withdrawals'), {
         uid: user.uid,
         email: user.email || null,
-        amount,
+        amount, // gross
+        feePct,
+        feeUsd,
+        netUsd,
         method: values.method,
         status: 'pending',
         createdAt: serverTimestamp(),
@@ -57,11 +132,18 @@ export default function Withdraw() {
         </div>
         <Form layout="vertical" onFinish={onFinish}>
           <Form.Item label="Amount" name="amount" rules={[{ required: true }]}>
-            <InputNumber style={{ width: '100%' }} min={1} prefix="$" />
+            <InputNumber style={{ width: '100%' }} min={1} prefix="$" onChange={(v)=>setAmountPreview(Number(v||0))} />
           </Form.Item>
           <Form.Item label="Receiving Method / Address" name="method" rules={[{ required: true }]}>
             <Input placeholder="USDT (TRC20) address or bank details" />
           </Form.Item>
+          <Alert
+            style={{ marginBottom: 12 }}
+            type="info"
+            showIcon
+            message={`Fee ${Number(settings.withdrawFeePct||0)}% • Min $${Number(settings.withdrawMin||0).toFixed(2)}`}
+            description={`If you request $${amountPreview||0}, estimated fee $${((amountPreview||0)*(Number(settings.withdrawFeePct||0)/100)).toFixed(2)} and net $${(amountPreview - (amountPreview*(Number(settings.withdrawFeePct||0)/100) || 0)).toFixed(2)}`}
+          />
           <Button type="primary" htmlType="submit" loading={loading} block>
             Submit Withdrawal
           </Button>

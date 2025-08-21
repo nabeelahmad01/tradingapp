@@ -16,6 +16,7 @@ import AdminWithdrawals from './pages/admin/AdminWithdrawals.jsx'
 import AdminNews from './pages/admin/AdminNews.jsx'
 import AdminLogin from './pages/admin/AdminLogin.jsx'
 import AdminUsers from './pages/admin/AdminUsers.jsx'
+import AdminSettings from './pages/admin/AdminSettings.jsx'
 import ProtectedRoute from './routes/ProtectedRoute.jsx'
 import AdminRoute from './routes/AdminRoute.jsx'
 import Trading from './pages/Trading.jsx'
@@ -126,6 +127,14 @@ export default function App() {
             element={
               <AdminRoute>
                 <AdminNews />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/settings"
+            element={
+              <AdminRoute>
+                <AdminSettings />
               </AdminRoute>
             }
           />
