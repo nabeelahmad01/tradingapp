@@ -27,6 +27,17 @@ export default function NavBar() {
     { key: 'trade', label: <Link to="/trade">Trade</Link> },
     { key: 'deposit', label: <Link to="/deposit">Deposit</Link> },
     { key: 'withdraw', label: <Link to="/withdraw">Withdraw</Link> },
+    { key: 'transfer', label: <Link to="/transfer">Transfer</Link> },
+    { key: 'paymentMethods', label: <Link to="/payment-methods">Payment Methods</Link> },
+    {
+      key: 'p2p',
+      label: 'P2P',
+      children: [
+        { key: 'p2pMarket', label: <Link to="/p2p/market">Market</Link> },
+        { key: 'p2pCreate', label: <Link to="/p2p/create-listing">Create Listing</Link> },
+        { key: 'p2pMyOrders', label: <Link to="/p2p/my-orders">My Orders</Link> },
+      ],
+    },
     { key: 'history', label: <Link to="/history">History</Link> },
     { key: 'news', label: <Link to="/news">News</Link> },
     { key: 'instructions', label: <Link to="/instructions">Instructions</Link> },

@@ -47,9 +47,10 @@ export default function AdminWithdrawals() {
   const columns = [
     { title: 'User', dataIndex: 'email' },
     { title: 'Amount', dataIndex: 'amount' },
-    { title: 'Fee', dataIndex: 'feeUsd', render: (v, r) => r.feeUsd !== undefined ? `$${Number(r.feeUsd||0).toFixed(2)} (${Number(r.feePct||0)}%)` : '-' },
+    { title: 'Fee', dataIndex: 'feeUsd', render: (v, r) => r.feeUsd !== undefined ? `$${Number(r.feeUsd||0).toFixed(2)}` : '-' },
     { title: 'Net', dataIndex: 'netUsd', render: (v, r) => r.netUsd !== undefined ? `$${Number(r.netUsd||0).toFixed(2)}` : '-' },
-    { title: 'Method', dataIndex: 'method' },
+    { title: 'Asset', dataIndex: 'asset' },
+    { title: 'Address/Details', dataIndex: 'address' },
     { title: 'Status', dataIndex: 'status', render: (s) => <Tag color={s==='pending'?'orange':s==='approved'?'green':'red'}>{s}</Tag> },
     { title: 'Actions', key: 'actions', render: (_, r) => (
       <Space>

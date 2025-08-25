@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Card, Typography, Form, InputNumber, Input, Button, message, Radio, Alert } from 'antd'
+import { Card, Typography, Form, InputNumber, Input, Button, message, Radio, Alert, Select } from 'antd'
 import { auth, db } from '../firebase.js'
 import { doc, getDoc, addDoc, collection, serverTimestamp, query, where, orderBy, limit as qlimit, getDocs, Timestamp } from 'firebase/firestore'
 import { onSettings, defaultSettings } from '../services/settings.js'
@@ -37,6 +37,8 @@ export default function Withdraw() {
       if (amount <= 0) throw new Error('Amount must be greater than 0')
       if (amount > balances.realBalance) throw new Error('Amount exceeds available Real balance')
       if (amount < Number(settings.withdrawMin || 0)) throw new Error(`Minimum withdrawal is $${Number(settings.withdrawMin||0).toFixed(2)}`)
+      const flatFee = Number(settings.flatWithdrawFeeUsd || 0)
+      if (amount <= flatFee) throw new Error(`Amount must be greater than flat fee $${flatFee.toFixed(2)}`)
       // KYC enforcement
       if (settings.kycRequired) {
         const uSnap = await getDoc(doc(db, 'users', user.uid))
@@ -95,18 +97,17 @@ export default function Withdraw() {
         const remaining = Math.max(0, maxPerDay - todaysGross)
         throw new Error(`Daily withdrawal cap $${maxPerDay.toFixed(2)}. You can request up to $${remaining.toFixed(2)} more today`)
       }
-      // compute fee and net
-      const feePct = Number(settings.withdrawFeePct || 0)
-      const feeUsd = +(amount * (feePct / 100)).toFixed(2)
+      // compute flat fee and net
+      const feeUsd = +Number(settings.flatWithdrawFeeUsd || 0).toFixed(2)
       const netUsd = +(amount - feeUsd).toFixed(2)
       await addDoc(collection(db, 'withdrawals'), {
         uid: user.uid,
         email: user.email || null,
         amount, // gross
-        feePct,
         feeUsd,
         netUsd,
-        method: values.method,
+        asset: values.asset,
+        address: values.address,
         status: 'pending',
         createdAt: serverTimestamp(),
       })
@@ -134,15 +135,22 @@ export default function Withdraw() {
           <Form.Item label="Amount" name="amount" rules={[{ required: true }]}>
             <InputNumber style={{ width: '100%' }} min={1} prefix="$" onChange={(v)=>setAmountPreview(Number(v||0))} />
           </Form.Item>
-          <Form.Item label="Receiving Method / Address" name="method" rules={[{ required: true }]}>
-            <Input placeholder="USDT (TRC20) address or bank details" />
+          <Form.Item label="Asset" name="asset" rules={[{ required: true }]}> 
+            <Select placeholder="Select asset">
+              {(settings.supportedAssets || []).map((a) => (
+                <Select.Option key={a} value={a}>{a}</Select.Option>
+              ))}
+            </Select>
+          </Form.Item>
+          <Form.Item label="Address / Details" name="address" rules={[{ required: true }]}>
+            <Input placeholder="Recipient address or bank details" />
           </Form.Item>
           <Alert
             style={{ marginBottom: 12 }}
             type="info"
             showIcon
-            message={`Fee ${Number(settings.withdrawFeePct||0)}% • Min $${Number(settings.withdrawMin||0).toFixed(2)}`}
-            description={`If you request $${amountPreview||0}, estimated fee $${((amountPreview||0)*(Number(settings.withdrawFeePct||0)/100)).toFixed(2)} and net $${(amountPreview - (amountPreview*(Number(settings.withdrawFeePct||0)/100) || 0)).toFixed(2)}`}
+            message={`Flat fee $${Number(settings.flatWithdrawFeeUsd||0).toFixed(2)} • Min $${Number(settings.withdrawMin||0).toFixed(2)}`}
+            description={`If you request $${amountPreview||0}, fee $${Number(settings.flatWithdrawFeeUsd||0).toFixed(2)} and net $${Math.max(0, (amountPreview||0) - Number(settings.flatWithdrawFeeUsd||0)).toFixed(2)}`}
           />
           <Button type="primary" htmlType="submit" loading={loading} block>
             Submit Withdrawal

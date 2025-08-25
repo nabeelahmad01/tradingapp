@@ -12,7 +12,24 @@ service cloud.firestore {
 
     match /users/{uid} {
       allow read: if isOwner(uid) || isAdmin();
-      allow write: if isOwner(uid) || isAdmin();
+      // Owners can update their own document EXCEPT sensitive balances.
+      // Admin can write all fields.
+      allow write: if isAdmin() || (
+        isOwner(uid) &&
+        // Prevent client from changing sensitive balance fields
+        (
+          // If the doc exists, require these fields to remain unchanged
+          (exists(/databases/$(database)/documents/users/$(uid)) &&
+            request.resource.data.realBalance == resource.data.realBalance &&
+            request.resource.data.escrowBalance == resource.data.escrowBalance
+          ) ||
+          // If creating a new doc, force balances to be zero or undefined
+          (!exists(/databases/$(database)/documents/users/$(uid)) &&
+            (request.resource.data.realBalance == null || request.resource.data.realBalance == 0) &&
+            (request.resource.data.escrowBalance == null || request.resource.data.escrowBalance == 0)
+          )
+        )
+      );
     }
 
     match /deposits/{doc} {
@@ -52,6 +69,77 @@ service cloud.firestore {
       allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
       allow read: if isAdmin() || (isSignedIn() && resource.data.uid == request.auth.uid);
       allow update, delete: if false;
+    }
+
+    // Platform config
+    match /config/{doc} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // User Payment Methods
+    match /paymentMethods/{doc} {
+      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+      allow read: if isAdmin() || (isSignedIn() && resource.data.uid == request.auth.uid);
+      allow update, delete: if isSignedIn() && resource.data.uid == request.auth.uid;
+    }
+
+    // P2P Listings (publicly readable, owner editable)
+    match /p2p_listings/{doc} {
+      allow read: if true;
+      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if isSignedIn() && resource.data.uid == request.auth.uid;
+    }
+
+    // P2P Orders (only participants can read/update)
+    match /p2p_orders/{doc} {
+      // Create if the requester is either the buyer or the seller on the order
+      allow create: if isSignedIn() && (
+        request.resource.data.buyerUid == request.auth.uid ||
+        request.resource.data.sellerUid == request.auth.uid
+      );
+      // Read for participants or admin
+      allow read: if isAdmin() || (isSignedIn() && (
+        resource.data.buyerUid == request.auth.uid ||
+        resource.data.sellerUid == request.auth.uid
+      ));
+      // Update status with basic state checks
+      allow update: if isSignedIn() && (
+        // Buyer can mark paid from pending_payment -> paid
+        (
+          resource.data.buyerUid == request.auth.uid &&
+          resource.data.status == 'pending_payment' &&
+          request.resource.data.status == 'paid'
+        ) ||
+        // Seller can release from paid -> released
+        (
+          resource.data.sellerUid == request.auth.uid &&
+          resource.data.status == 'paid' &&
+          request.resource.data.status == 'released'
+        ) ||
+        // Either party can cancel while pending_payment
+        (
+          (resource.data.buyerUid == request.auth.uid || resource.data.sellerUid == request.auth.uid) &&
+          resource.data.status == 'pending_payment' &&
+          request.resource.data.status == 'cancelled'
+        )
+      );
+      allow delete: if false;
+    }
+
+    // Internal Transfers (server only via Admin SDK)
+    match /internalTransfers/{doc} {
+      allow read, write: if false; // handled by Netlify functions
+    }
+
+    // Transfer history (server only)
+    match /transfersHistory/{doc} {
+      allow read, write: if false;
+    }
+
+    // Email OTP storage (server only)
+    match /emailOtps/{doc} {
+      allow read, write: if false;
     }
   }
 }

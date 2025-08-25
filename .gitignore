@@ -12,6 +12,16 @@ dist
 dist-ssr
 *.local
 
+# Local environment files (keep only .env.example tracked)
+.env
+.env.*
+!.env.example
+
+# Firebase Admin service accounts and other secrets
+serviceAccount*.json
+*firebase-adminsdk*.json
+*service-account*.json
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
@@ -22,3 +32,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Local Netlify folder
+.netlify

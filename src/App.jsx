@@ -8,6 +8,11 @@ import Signup from './pages/Signup.jsx'
 import Deposit from './pages/Deposit.jsx'
 import Withdraw from './pages/Withdraw.jsx'
 import History from './pages/History.jsx'
+import Transfer from './pages/Transfer.jsx'
+import PaymentMethods from './pages/PaymentMethods.jsx'
+import P2PCreateListing from './pages/p2p/CreateListing.jsx'
+import P2PMarket from './pages/p2p/Market.jsx'
+import P2PMyOrders from './pages/p2p/MyOrders.jsx'
 import News from './pages/News.jsx'
 import Instructions from './pages/Instructions.jsx'
 import AdminDashboard from './pages/admin/AdminDashboard.jsx'
@@ -73,6 +78,46 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <Withdraw />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/transfer"
+            element={
+              <ProtectedRoute>
+                <Transfer />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/payment-methods"
+            element={
+              <ProtectedRoute>
+                <PaymentMethods />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/p2p/create-listing"
+            element={
+              <ProtectedRoute>
+                <P2PCreateListing />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/p2p/market"
+            element={
+              <ProtectedRoute>
+                <P2PMarket />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/p2p/my-orders"
+            element={
+              <ProtectedRoute>
+                <P2PMyOrders />
               </ProtectedRoute>
             }
           />

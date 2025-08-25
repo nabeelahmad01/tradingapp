@@ -1,13 +1,22 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { Card, Typography, Row, Col, Button, Space, Steps, Collapse, Select, Input, Segmented } from 'antd'
 import { Link } from 'react-router-dom'
 import TradeChart from '../components/TradeChart.jsx'
 import SupportWidget from '../components/SupportWidget.jsx'
+import { onSettings, defaultSettings } from '../services/settings.js'
 
 export default function Home() {
   const [symbol, setSymbol] = useState('BTCUSDT')
   const [interval, setInterval] = useState('1m')
   const [custom, setCustom] = useState('')
+  const [exchange, setExchange] = useState(defaultSettings.defaultExchange || 'binance')
+
+  useEffect(() => {
+    const unsub = onSettings((s) => {
+      if (s.defaultExchange) setExchange(String(s.defaultExchange).toLowerCase())
+    })
+    return () => unsub && unsub()
+  }, [])
   return (
     <div className="container" style={{ paddingBlock: 16 }}>
       <Row gutter={[16, 16]} align="middle">
@@ -51,7 +60,7 @@ export default function Home() {
                   options={[ '1m','5m','15m','1h','4h','1d' ]}
                 />
               </Space>
-              <TradeChart height={260} theme="dark" symbol={symbol} interval={interval} />
+              <TradeChart height={260} theme="dark" symbol={symbol} interval={interval} exchange={exchange} />
             </Space>
           </Card>
         </Col>

@@ -19,6 +19,12 @@ export const defaultSettings = {
   withdrawMinVolumeUsd: 100, // minimum lifetime traded amount before withdrawal
   withdrawMaxRequestsPerDay: 2, // per-user max requests per day
   withdrawProcessingETA: '24-48 hours',
+  // Market data source
+  defaultExchange: 'binance', // 'binance' | 'mexc'
+  // Payments provider settings (Phase 1)
+  paymentsProvider: 'nowpayments', // 'nowpayments' | 'coinbase_commerce'
+  supportedAssets: ['USDT-TRC20', 'BTC', 'ETH', 'BNB-BEP20', 'TRX', 'USDT-ERC20'],
+  flatWithdrawFeeUsd: 3, // flat USD fee applied to withdrawals
 }
 
 export async function getSettingsOnce() {

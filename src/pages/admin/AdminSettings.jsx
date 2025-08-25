@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Card, Form, InputNumber, Switch, Button, Space, message, Input } from 'antd'
+import { Card, Form, InputNumber, Switch, Button, Space, message, Input, Select } from 'antd'
 import AdminHeader from '../../components/admin/AdminHeader.jsx'
 import { getSettingsOnce, onSettings, saveSettings } from '../../services/settings.js'
 
@@ -11,7 +11,6 @@ export default function AdminSettings() {
     const unsub = onSettings((s) => {
       form.setFieldsValue({
         payoutPct: Number(s.payoutPct || 0),
-        withdrawFeePct: Number(s.withdrawFeePct || 0),
         withdrawMin: Number(s.withdrawMin || 0),
         withdrawMaxPerDay: Number(s.withdrawMaxPerDay || 0),
         demoBalanceDefault: Number(s.demoBalanceDefault || 10000),
@@ -21,6 +20,10 @@ export default function AdminSettings() {
         withdrawMinVolumeUsd: Number(s.withdrawMinVolumeUsd || 0),
         withdrawMaxRequestsPerDay: Number(s.withdrawMaxRequestsPerDay || 0),
         withdrawProcessingETA: s.withdrawProcessingETA || '24-48 hours',
+        defaultExchange: (s.defaultExchange || 'binance').toLowerCase(),
+        paymentsProvider: (s.paymentsProvider || 'nowpayments'),
+        supportedAssets: s.supportedAssets || [],
+        flatWithdrawFeeUsd: Number(s.flatWithdrawFeeUsd || 0),
       })
     })
     return () => unsub && unsub()
@@ -43,8 +46,31 @@ export default function AdminSettings() {
       <AdminHeader />
       <Card title="Platform Settings" style={{ maxWidth: 720 }}>
         <Form layout="vertical" form={form} onFinish={onFinish}>
+          <Form.Item label="Default Exchange" name="defaultExchange" rules={[{ required: true }]}> 
+            <Select
+              options={[
+                { label: 'Binance', value: 'binance' },
+                { label: 'MEXC', value: 'mexc' },
+              ]}
+            />
+          </Form.Item>
+          <Form.Item label="Payments Provider" name="paymentsProvider" rules={[{ required: true }]} >
+            <Select
+              options={[
+                { label: 'NOWPayments', value: 'nowpayments' },
+                { label: 'Coinbase Commerce', value: 'coinbase_commerce' },
+              ]}
+            />
+          </Form.Item>
+          <Form.Item label="Supported Assets" name="supportedAssets" rules={[{ required: true }]} >
+            <Select mode="tags" tokenSeparators={[',']}
+              placeholder="Add assets e.g. USDT-TRC20, BTC" />
+          </Form.Item>
           <Form.Item label="Payout % (user win payout)" name="payoutPct" rules={[{ required: true }]}> 
             <InputNumber min={50} max={98} step={0.5} addonAfter="%" style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item label="Flat Withdrawal Fee ($)" name="flatWithdrawFeeUsd" rules={[{ required: true }]}> 
+            <InputNumber min={0} step={0.5} addonBefore="$" style={{ width: '100%' }} />
           </Form.Item>
           <Form.Item label="Withdrawal Fee %" name="withdrawFeePct" rules={[{ required: true }]}> 
             <InputNumber min={0} max={15} step={0.1} addonAfter="%" style={{ width: '100%' }} />

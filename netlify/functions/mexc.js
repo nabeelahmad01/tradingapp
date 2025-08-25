@@ -1,5 +1,5 @@
-// Netlify Function: Proxy to Binance API with CORS
-// Usage (prod): /.netlify/functions/binance/api/v3/klines?symbol=BTCUSDT&interval=1m&limit=500
+// Netlify Function: Proxy to MEXC API with CORS
+// Usage (prod): /.netlify/functions/mexc/api/v3/klines?symbol=BTCUSDT&interval=1m&limit=500
 
 exports.handler = async (event) => {
   try {
@@ -15,7 +15,7 @@ exports.handler = async (event) => {
     }
 
     // Compute the path after the function prefix
-    const functionPrefix = '/.netlify/functions/binance'
+    const functionPrefix = '/.netlify/functions/mexc'
     const originalPath = event.path || ''
     const forwardPath = originalPath.startsWith(functionPrefix)
       ? originalPath.slice(functionPrefix.length)
@@ -23,15 +23,9 @@ exports.handler = async (event) => {
 
     // Build the forward URL
     const qs = new URLSearchParams(event.queryStringParameters || {}).toString()
-    const urlA = `https://api.binance.com${forwardPath}${qs ? `?${qs}` : ''}`
+    const url = `https://api.mexc.com${forwardPath}${qs ? `?${qs}` : ''}`
 
-    // Try primary, fall back to public mirror if 451 or blocked
-    let res = await fetch(urlA)
-    if (res.status === 451 || res.status === 403) {
-      const urlB = `https://data-api.binance.vision${forwardPath}${qs ? `?${qs}` : ''}`
-      res = await fetch(urlB)
-    }
-
+    const res = await fetch(url)
     const text = await res.text()
     return {
       statusCode: res.status,

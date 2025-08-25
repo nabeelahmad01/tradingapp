@@ -17,6 +17,7 @@ export default function Trading() {
   const latestPriceRef = useRef(null)
   const setLatestPrice = (p) => { latestPriceRef.current = p; _setLatestPrice(p) }
   const [duration, setDuration] = useState('1m') // 30s, 1m, 5m
+  const [exchange, setExchange] = useState(defaultSettings.defaultExchange || 'binance')
   const [payoutPct, setPayoutPct] = useState(defaultSettings.payoutPct)
   const [positions, setPositions] = useState([])
   const [history, setHistory] = useState([])
@@ -33,9 +34,12 @@ export default function Trading() {
     return () => clearTimeout(t)
   }, [lastPlaced])
 
-  // Subscribe to platform settings for payout %
+  // Subscribe to platform settings for payout % and default exchange
   useEffect(() => {
-    const unsub = onSettings((s) => setPayoutPct(Number(s.payoutPct || defaultSettings.payoutPct)))
+    const unsub = onSettings((s) => {
+      setPayoutPct(Number(s.payoutPct || defaultSettings.payoutPct))
+      if (s.defaultExchange) setExchange(String(s.defaultExchange).toLowerCase())
+    })
     return () => unsub && unsub()
   }, [])
 
@@ -245,6 +249,16 @@ export default function Trading() {
                   <Space wrap>
                     <Select
                       size="small"
+                      value={exchange}
+                      style={{ width: 120 }}
+                      onChange={setExchange}
+                      options={[
+                        { label: 'Binance', value: 'binance' },
+                        { label: 'MEXC', value: 'mexc' },
+                      ]}
+                    />
+                    <Select
+                      size="small"
                       value={symbol}
                       style={{ width: 140 }}
                       onChange={setSymbol}
@@ -305,7 +319,7 @@ export default function Trading() {
                 style={{ marginBottom: 8 }}
               />
             )}
-            <TradeChart height={460} theme={theme} symbol={symbol} interval={tfToBinance[timeframe]} onPriceUpdate={setLatestPrice} />
+            <TradeChart height={460} theme={theme} symbol={symbol} interval={tfToBinance[timeframe]} exchange={exchange} onPriceUpdate={setLatestPrice} />
             {/* Mobile trade panel under chart */}
             <div className="only-mobile" style={{ marginTop: 8 }}>
               <Card size="small" styles={{ body: { padding: 12 } }}>

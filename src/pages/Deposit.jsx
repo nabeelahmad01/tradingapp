@@ -1,63 +1,75 @@
-import React, { useState } from 'react'
-import { Card, Typography, Form, Input, InputNumber, Upload, Button, message } from 'antd'
-import { UploadOutlined } from '@ant-design/icons'
-import { auth, db, storage } from '../firebase.js'
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
-import { addDoc, collection, serverTimestamp } from 'firebase/firestore'
+import React, { useState, useEffect } from 'react'
+import { Card, Typography, Form, InputNumber, Button, message, Select, Alert, Modal } from 'antd'
+import { auth } from '../firebase.js'
+import { onSettings, defaultSettings } from '../services/settings.js'
 
 export default function Deposit() {
   const [loading, setLoading] = useState(false)
-  const [fileList, setFileList] = useState([])
   const [form] = Form.useForm()
+  const [settings, setSettings] = useState(defaultSettings)
+  const [lastInvoice, setLastInvoice] = useState(null)
+  const [minUsd, setMinUsd] = useState(0)
+  const [minLoading, setMinLoading] = useState(false)
+  const [showModal, setShowModal] = useState(false)
+  const [iframeLoading, setIframeLoading] = useState(true)
+
+  useEffect(() => {
+    const unsub = onSettings((s) => setSettings(s))
+    return () => unsub && unsub()
+  }, [])
+
+  const fetchMin = async (asset) => {
+    if (!asset) { setMinUsd(0); return }
+    setMinLoading(true)
+    try {
+      const res = await fetch('/.netlify/functions/nowpayments-min-amount', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ asset })
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data?.error || 'Failed to fetch minimum amount')
+      setMinUsd(Number(data.minUsd || 0))
+    } catch (e) {
+      setMinUsd(0)
+      message.warning(e.message)
+    } finally {
+      setMinLoading(false)
+    }
+  }
 
   const onFinish = async (values) => {
     setLoading(true)
     try {
       const user = auth.currentUser
-      if (!user) throw new Error('Please login to submit a deposit')
-      const amount = Number(values.amount)
-      if (!amount || amount <= 0) throw new Error('Enter a valid amount')
-      if (!fileList?.[0]?.originFileObj) throw new Error('Please select a screenshot')
+      if (!user) throw new Error('Please login to create a deposit')
+      const amountUsd = Number(values.amount)
+      if (!amountUsd || amountUsd <= 0) throw new Error('Enter a valid amount')
+      const asset = values.asset
+      if (!asset) throw new Error('Select an asset')
 
-      // 1) Create deposit doc immediately
-      const docRef = await addDoc(collection(db, 'deposits'), {
-        uid: user.uid,
-        email: user.email || null,
-        amount,
-        txId: values.txId,
-        screenshotUrl: null,
-        status: 'pending',
-        createdAt: serverTimestamp(),
+      // Enforce provider minimum
+      if (minUsd && amountUsd < minUsd) {
+        throw new Error(`Minimum for ${asset} is $${minUsd}`)
+      }
+
+      const res = await fetch('/.netlify/functions/nowpayments-create-intent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ asset, amountUsd, uid: user.uid, email: user.email }),
       })
-
-      // Notify immediately and release UI
-      message.success('Deposit submitted for review')
-      setFileList([])
-      form.resetFields()
-      setLoading(false)
-
-      // 2) Upload screenshot in background and patch the doc (do not await to avoid blocking UI)
-      if (fileList?.[0]?.originFileObj) {
-        ;(async () => {
-          try {
-            const file = fileList[0].originFileObj
-            const path = `deposits/${user.uid}/${Date.now()}_${file.name}`
-            const storageRef = ref(storage, path)
-            await uploadBytes(storageRef, file)
-            const screenshotUrl = await getDownloadURL(storageRef)
-            const { updateDoc, doc } = await import('firebase/firestore')
-            await updateDoc(doc(db, 'deposits', docRef.id), { screenshotUrl })
-          } catch (e) {
-            // Non-fatal: keep the deposit request without screenshot
-            // eslint-disable-next-line no-console
-            console.error('Screenshot upload failed:', e)
-          }
-        })()
+      const data = await res.json()
+      if (!res.ok) throw new Error(data?.error || 'Failed to create invoice')
+      const url = data?.invoice?.invoice_url
+      setLastInvoice({ url, id: data?.invoice?.id, orderId: data?.orderId })
+      message.success('Invoice created')
+      if (url) {
+        setIframeLoading(true)
+        setShowModal(true)
       }
     } catch (e) {
       message.error(e.message)
     } finally {
-      // loading is already turned off above on success; keep here for error paths
       setLoading(false)
     }
   }
@@ -66,33 +78,70 @@ export default function Deposit() {
     <div className="container" style={{ maxWidth: 640 }}>
       <Card>
         <Typography.Title level={3}>Deposit</Typography.Title>
-        <Form form={form} layout="vertical" onFinish={onFinish}>
-          <Form.Item label="Amount" name="amount" rules={[{ required: true }]}> 
-            <InputNumber style={{ width: '100%' }} min={1} prefix="$" />
+        <Form form={form} layout="vertical" onFinish={onFinish} onValuesChange={(c, all)=>{
+          if (Object.prototype.hasOwnProperty.call(c, 'asset')) fetchMin(c.asset)
+        }}>
+          <Form.Item label="Amount (USD)" name="amount" rules={[{ required: true }]}> 
+            <InputNumber style={{ width: '100%' }} min={minUsd || 5} prefix="$" />
           </Form.Item>
-          <Form.Item label="Binance Transaction ID" name="txId" rules={[{ required: true }]}> 
-            <Input placeholder="Enter TxID" />
+          <Form.Item label="Asset" name="asset" rules={[{ required: true }]}> 
+            <Select placeholder="Select asset">
+              {(settings.supportedAssets || []).map((a) => (
+                <Select.Option key={a} value={a}>{a}</Select.Option>
+              ))}
+            </Select>
           </Form.Item>
-          <Form.Item 
-            label="Screenshot" 
-            name="screenshot" 
-            valuePropName="fileList"
-            getValueFromEvent={({ fileList }) => fileList}
-            rules={[{ required: true, validator: (_, v) => (v && v.length > 0 ? Promise.resolve() : Promise.reject(new Error('Screenshot is required'))) }]}>
-              <Upload
-                beforeUpload={() => false}
-                maxCount={1}
-                accept="image/*"
-                fileList={fileList}
-                onChange={({ fileList }) => setFileList(fileList)}
-              >
-                <Button icon={<UploadOutlined />}>Select Image</Button>
-              </Upload>
-          </Form.Item>
-          <Button type="primary" htmlType="submit" loading={loading} block>
-            Submit Deposit
+          {minUsd > 0 && (
+            <Alert type="info" showIcon style={{ marginBottom: 12 }} message={`Minimum for selected asset is $${minUsd}`} />
+          )}
+          <Alert type="info" showIcon style={{ marginBottom: 12 }} message={`Provider: ${settings.paymentsProvider || 'nowpayments'}`} />
+          <Button type="primary" htmlType="submit" loading={loading || minLoading} block>
+            Create Payment Link
           </Button>
         </Form>
+        <Modal
+          title="Complete Payment"
+          open={showModal}
+          onCancel={() => setShowModal(false)}
+          footer={[
+            <Button key="open" type="link" onClick={() => lastInvoice?.url && window.open(lastInvoice.url, '_blank')}>Open in new tab</Button>,
+            <Button key="close" onClick={() => setShowModal(false)}>Close</Button>,
+          ]}
+          width={720}
+          destroyOnClose
+        >
+          {lastInvoice?.url ? (
+            <div style={{ height: 600, position: 'relative' }}>
+              {iframeLoading && (
+                <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Typography.Text>Loading payment page...</Typography.Text>
+                </div>
+              )}
+              <iframe
+                title="NOWPayments Invoice"
+                src={lastInvoice.url}
+                style={{ width: '100%', height: '100%', border: 0 }}
+                onLoad={() => setIframeLoading(false)}
+                referrerPolicy="no-referrer"
+              />
+              <div style={{ marginTop: 8 }}>
+                <Alert
+                  type="info"
+                  showIcon
+                  message="If the invoice does not display due to browser security settings, use 'Open in new tab'."
+                />
+              </div>
+            </div>
+          ) : (
+            <Alert type="error" message="Missing invoice URL" />
+          )}
+        </Modal>
+        {lastInvoice?.url && (
+          <div style={{ marginTop: 12 }}>
+            <Typography.Text>Latest invoice:</Typography.Text>{' '}
+            <a href={lastInvoice.url} target="_blank" rel="noreferrer">{lastInvoice.url}</a>
+          </div>
+        )}
       </Card>
     </div>
   )

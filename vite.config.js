@@ -17,6 +17,12 @@ export default defineConfig({
         secure: true,
         rewrite: (path) => path.replace(/^\/api\/binance-vision/, ''),
       },
+      '/api/mexc': {
+        target: 'https://api.mexc.com',
+        changeOrigin: true,
+        secure: true,
+        rewrite: (path) => path.replace(/^\/api\/mexc/, ''),
+      },
     },
   },
 })

@@ -12,12 +12,18 @@ function toCandles(klines) {
   }))
 }
 
-export default function TradeChart({ height = 420, theme = 'light', symbol = 'BTCUSDT', interval = '1m', onPriceUpdate }) {
+export default function TradeChart({ height = 420, theme = 'light', symbol = 'BTCUSDT', interval = '1m', exchange = 'binance', onPriceUpdate }) {
   const containerRef = useRef(null)
   const chartRef = useRef(null)
   const seriesRef = useRef(null)
   const pollRef = useRef(null)
-  const base = import.meta.env.DEV ? '/api/binance' : '/.netlify/functions/binance'
+  const base = (() => {
+    const ex = (exchange || 'binance').toLowerCase()
+    if (import.meta.env.DEV) {
+      return ex === 'mexc' ? '/api/mexc' : '/api/binance'
+    }
+    return ex === 'mexc' ? '/.netlify/functions/mexc' : '/.netlify/functions/binance'
+  })()
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -109,7 +115,7 @@ export default function TradeChart({ height = 420, theme = 'light', symbol = 'BT
       stopPolling()
       chart.remove()
     }
-  }, [height, theme, symbol, interval])
+  }, [height, theme, symbol, interval, exchange])
 
   return (
     <div ref={containerRef} style={{ width: '100%', height }} />
