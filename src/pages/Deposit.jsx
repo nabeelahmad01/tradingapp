@@ -48,9 +48,24 @@ export default function Deposit() {
       const asset = values.asset
       if (!asset) throw new Error('Select an asset')
 
-      // Enforce provider minimum
-      if (minUsd && amountUsd < minUsd) {
-        throw new Error(`Minimum for ${asset} is $${minUsd}`)
+      // Re-fetch latest provider minimum to avoid price/rounding issues
+      let currentMin = Number(minUsd || 0)
+      try {
+        const fres = await fetch('/.netlify/functions/nowpayments-min-amount', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ asset })
+        })
+        const fdata = await fres.json()
+        if (fres.ok) {
+          currentMin = Math.max(currentMin, Number(fdata?.minUsd || 0))
+          setMinUsd(currentMin)
+        }
+      } catch { /* ignore and use existing min */ }
+
+      // Enforce provider minimum with latest value
+      if (currentMin && amountUsd < currentMin) {
+        throw new Error(`Minimum for ${asset} is $${currentMin}`)
       }
 
       const res = await fetch('/.netlify/functions/nowpayments-create-intent', {
@@ -63,9 +78,10 @@ export default function Deposit() {
       const url = data?.invoice?.invoice_url
       setLastInvoice({ url, id: data?.invoice?.id, orderId: data?.orderId })
       message.success('Invoice created')
+      // Open in the same tab for best compatibility (some providers block iframes)
       if (url) {
-        setIframeLoading(true)
-        setShowModal(true)
+        window.location.href = url
+        return
       }
     } catch (e) {
       message.error(e.message)
@@ -107,7 +123,7 @@ export default function Deposit() {
             <Button key="open" type="link" onClick={() => lastInvoice?.url && window.open(lastInvoice.url, '_blank')}>Open in new tab</Button>,
             <Button key="close" onClick={() => setShowModal(false)}>Close</Button>,
           ]}
-          width={720}
+          style={{ maxWidth: '95vw' }}
           destroyOnClose
         >
           {lastInvoice?.url ? (

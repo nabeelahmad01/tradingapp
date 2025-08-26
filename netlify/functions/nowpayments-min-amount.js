@@ -23,7 +23,14 @@ exports.handler = async (event) => {
     }
 
     // API returns { min_amount, currency_from, currency_to }
-    const minUsd = Number(data?.min_amount || 0)
+    const minUsdRaw = Number(data?.min_amount || 0)
+    // Add safety buffer to account for exchange rate drift and rounding to crypto units
+    // Use a stronger buffer for BTC since its minimum in crypto often causes rounding issues
+    const isBtc = payCurrency === 'btc'
+    const buffered = isBtc
+      ? Math.max(minUsdRaw * 1.06, minUsdRaw + 1) // ~6% or +$1 for BTC
+      : Math.max(minUsdRaw * 1.02, minUsdRaw + 0.5)
+    const minUsd = Math.round(buffered * 100) / 100 // 2 decimals
 
     return { statusCode: 200, headers: cors(), body: JSON.stringify({ ok: true, minUsd, payCurrency }) }
   } catch (e) {
