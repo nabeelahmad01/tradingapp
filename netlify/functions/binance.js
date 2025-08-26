@@ -13,6 +13,7 @@ exports.handler = async (event) => {
         body: 'Method Not Allowed',
       }
     }
+    
 
     // Compute the path after the function prefix
     const functionPrefix = '/.netlify/functions/binance'

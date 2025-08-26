@@ -22,9 +22,13 @@ export const defaultSettings = {
   // Market data source
   defaultExchange: 'binance', // 'binance' | 'mexc'
   // Payments provider settings (Phase 1)
-  paymentsProvider: 'nowpayments', // 'nowpayments' | 'coinbase_commerce'
+  paymentsProvider: 'nowpayments', // 'nowpayments' | 'coinbase_commerce' | 'manual_cashapp'
   supportedAssets: ['USDT-TRC20', 'BTC', 'ETH', 'BNB-BEP20', 'TRX', 'USDT-ERC20'],
   flatWithdrawFeeUsd: 3, // flat USD fee applied to withdrawals
+  // Manual Cash App settings (optional)
+  cashAppEnabled: false,
+  cashAppCashtag: '', // e.g., $YourTag
+  cashAppNote: 'Include your registered email in the Cash App note. Upload a screenshot after sending.',
 }
 
 export async function getSettingsOnce() {

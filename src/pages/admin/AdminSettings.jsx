@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Card, Form, InputNumber, Switch, Button, Space, message, Input, Select } from 'antd'
+import { Card, Form, InputNumber, Switch, Button, Space, message, Input, Select, Alert } from 'antd'
 import AdminHeader from '../../components/admin/AdminHeader.jsx'
 import { getSettingsOnce, onSettings, saveSettings } from '../../services/settings.js'
 
@@ -24,6 +24,9 @@ export default function AdminSettings() {
         paymentsProvider: (s.paymentsProvider || 'nowpayments'),
         supportedAssets: s.supportedAssets || [],
         flatWithdrawFeeUsd: Number(s.flatWithdrawFeeUsd || 0),
+        cashAppEnabled: !!s.cashAppEnabled,
+        cashAppCashtag: s.cashAppCashtag || '',
+        cashAppNote: s.cashAppNote || 'Include your registered email in the Cash App note. Upload a screenshot after sending.',
       })
     })
     return () => unsub && unsub()
@@ -59,8 +62,19 @@ export default function AdminSettings() {
               options={[
                 { label: 'NOWPayments', value: 'nowpayments' },
                 { label: 'Coinbase Commerce', value: 'coinbase_commerce' },
+                { label: 'Manual - Cash App', value: 'manual_cashapp' },
               ]}
             />
+          </Form.Item>
+          <Alert style={{ marginBottom: 12 }} type="info" showIcon message="Manual Cash App is a screenshot-based flow. You must verify and approve deposits in Admin Deposits." />
+          <Form.Item label="Enable Cash App" name="cashAppEnabled" valuePropName="checked">
+            <Switch />
+          </Form.Item>
+          <Form.Item label="Cash App Cashtag (e.g., $YourTag)" name="cashAppCashtag">
+            <Input placeholder="$YourTag" />
+          </Form.Item>
+          <Form.Item label="Cash App Instructions Shown To Users" name="cashAppNote">
+            <Input.TextArea rows={3} placeholder="Instruction text shown on Deposit page" />
           </Form.Item>
           <Form.Item label="Supported Assets" name="supportedAssets" rules={[{ required: true }]} >
             <Select mode="tags" tokenSeparators={[',']}

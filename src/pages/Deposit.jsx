@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react'
-import { Card, Typography, Form, InputNumber, Button, message, Select, Alert, Modal } from 'antd'
-import { auth } from '../firebase.js'
+import { Card, Typography, Form, InputNumber, Button, message, Select, Alert, Modal, Input, Upload } from 'antd'
+import { UploadOutlined } from '@ant-design/icons'
+import { auth, db, storage } from '../firebase.js'
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore'
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage'
 import { onSettings, defaultSettings } from '../services/settings.js'
 
 export default function Deposit() {
@@ -47,6 +50,39 @@ export default function Deposit() {
       if (!amountUsd || amountUsd <= 0) throw new Error('Enter a valid amount')
       const asset = values.asset
       if (!asset) throw new Error('Select an asset')
+
+      // Manual Cash App flow
+      if ((settings.paymentsProvider === 'manual_cashapp') && settings.cashAppEnabled) {
+        const senderCashtag = values.senderCashtag?.trim()
+        if (!senderCashtag) throw new Error('Enter your Cash App cashtag')
+        const fileList = values.screenshot?.fileList || []
+        if (!fileList.length) throw new Error('Upload a payment screenshot')
+        const fileObj = fileList[0].originFileObj
+        if (!fileObj) throw new Error('Invalid file upload')
+
+        // upload screenshot
+        const path = `deposits/${user.uid}/${Date.now()}-${fileObj.name}`
+        const sref = ref(storage, path)
+        await uploadBytes(sref, fileObj)
+        const screenshotUrl = await getDownloadURL(sref)
+
+        // create pending deposit
+        await addDoc(collection(db, 'deposits'), {
+          uid: user.uid,
+          email: user.email || null,
+          method: 'cashapp',
+          amount: amountUsd,
+          asset: 'USD',
+          senderCashtag,
+          txId: values.txId || null,
+          screenshotUrl,
+          status: 'pending',
+          createdAt: serverTimestamp(),
+        })
+        message.success('Submitted. We will verify and approve shortly.')
+        form.resetFields()
+        return
+      }
 
       // Re-fetch latest provider minimum to avoid price/rounding issues
       let currentMin = Number(minUsd || 0)
@@ -111,6 +147,29 @@ export default function Deposit() {
             <Alert type="info" showIcon style={{ marginBottom: 12 }} message={`Minimum for selected asset is $${minUsd}`} />
           )}
           <Alert type="info" showIcon style={{ marginBottom: 12 }} message={`Provider: ${settings.paymentsProvider || 'nowpayments'}`} />
+
+          {settings.paymentsProvider === 'manual_cashapp' && settings.cashAppEnabled && (
+            <div style={{ marginBottom: 12 }}>
+              <Alert
+                type="warning"
+                showIcon
+                message={`Send payment on Cash App to ${settings.cashAppCashtag || 'your cashtag'}`}
+                description={settings.cashAppNote || 'After sending, enter your cashtag and upload a screenshot. We will verify and approve shortly.'}
+                style={{ marginBottom: 12 }}
+              />
+              <Form.Item label="Your Cash App cashtag" name="senderCashtag" rules={[{ required: true, message: 'Enter your Cash App cashtag' }]}> 
+                <Input placeholder="$YourCashtag" />
+              </Form.Item>
+              <Form.Item label="Payment Reference / Note (optional)" name="txId"> 
+                <Input placeholder="Reference or note you used in Cash App" />
+              </Form.Item>
+              <Form.Item label="Screenshot" name="screenshot" valuePropName="fileList" getValueFromEvent={(e)=>e?.fileList} rules={[{ required: true, message: 'Upload screenshot' }]}> 
+                <Upload beforeUpload={()=>false} listType="picture">
+                  <Button icon={<UploadOutlined />}>Upload Screenshot</Button>
+                </Upload>
+              </Form.Item>
+            </div>
+          )}
           <Button type="primary" htmlType="submit" loading={loading || minLoading} block>
             Create Payment Link
           </Button>
