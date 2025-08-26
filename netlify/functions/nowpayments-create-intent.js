@@ -14,6 +14,9 @@ function initAdmin() {
 
 exports.handler = async (event) => {
   try {
+    if (event.httpMethod === 'OPTIONS') {
+      return { statusCode: 204, headers: cors(), body: '' }
+    }
     if (event.httpMethod !== 'POST') {
       return { statusCode: 405, headers: cors(), body: 'Method Not Allowed' }
     }
